@@ -13,7 +13,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           owner: ${{ github.repository_owner }}
           package: webmap
-          registry-url: ghcr.io
           delete-tags: "*"
           exclude-tags: latest
           delete-untagged: true
