@@ -10,9 +10,10 @@ jobs:
     steps:
       - uses: dataaxiom/ghcr-cleanup-action@v1.2.2
         with:
-          registry: ghcr.io
+          token: ${{ secrets.GITHUB_TOKEN }}
           owner: ${{ github.repository_owner }}
-          package-name: webmap
+          package: webmap
+          registry-url: ghcr.io
           delete-tags: "*"
           exclude-tags: latest
           delete-untagged: true
