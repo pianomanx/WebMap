@@ -1,0 +1,18 @@
+name: GitHub Container Registry Cleanup
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@v1.2.2
+        with:
+          registry: ghcr.io
+          owner: ${{ github.repository_owner }}
+          package-name: webmap
+          delete-tags: "*"
+          exclude-tags: latest
+          delete-untagged: true
