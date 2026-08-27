@@ -5,55 +5,58 @@ import os, re, json, hashlib, time, shutil, subprocess, threading
 
 def nmap_scaninfo(request):
 	tmpfiles = os.listdir('/tmp/')
-
 	res = {'out':[], 'scans':{}}
 
 	for ff in tmpfiles:
-		if re.search(r'\.xml.active$', ff) is not None:
-			f = ff[0:-7]
-			res['scans'][f] = {'status':'active'}
-			try:
-				with open('/tmp/'+ff) as n:
-					lines = n.readlines()
-					for line in lines:
-						#res['out'].append(line.strip())
-						# <nmaprun scanner="nmap" args="nmap -oG /tmp/test.grep -oX /tmp/scan.xml -sT -sV -sC -T5 scanme.nmap.org" start="1541780258" startstr="Fri Nov  9 16:17:38 2018" version="7.60" xmloutputversion="1.04">
+		if not ff.endswith('.active'):
+			continue
 
-						rx = re.search(r'args\=.+\-oX \/tmp\/(.+\.xml).+ start\=.+ startstr\=.(.+). version\=', line.strip())
-						if rx is not None:
-							res['scans'][f]['filename'] = rx.group(1)
-							res['scans'][f]['startstr'] = rx.group(2)
+		if ff.endswith('.xml.active'):
+			f = ff[:-7]
+		else:
+			f = ff[:-6]
 
-						rx = re.search(r'scaninfo type\=.(.+). protocol\=.(.+). numservices', line.strip())
-						if rx is not None:
-							res['scans'][f]['type'] = rx.group(1)
-							res['scans'][f]['protocol'] = rx.group(2)
+		res['scans'][f] = {'status':'active'}
+		try:
+			with open('/tmp/' + ff) as n:
+				lines = n.readlines()
+				for line in lines:
+					line = line.strip()
+					if not line:
+						continue
 
-						# <finished time="1541780323" timestr="Fri Nov  9 16:18:43 2018" elapsed="65.31" summary="Nmap done at Fri Nov  9 16:18:43 2018; 1 IP address (1 host up) scanned in 65.31 seconds" exit="success"/><hosts up="1" down="0" total="1"/>
-						rx = re.search(r'finished .+ summary\=.(.+). exit\=', line.strip())
-						if rx is not None:
-							res['scans'][f]['status'] = 'finished'
-							res['scans'][f]['summary'] = rx.group(1)
+					rx = re.search(r'args\s*=\s*["\']?[^"\']*-oX\s+/tmp/([^"\'\s]+)', line)
+					if rx is not None:
+						res['scans'][f]['filename'] = rx.group(1)
 
-							# Attempt to move the file if it's marked as finished but still in /tmp
-							# This handles cases where the background shell command's 'mv' failed or didn't run.
-							try:
-								# ff is filename.active (e.g. scan.xml.active)
-								# We want to move it to /opt/xml/scan.xml
-								# Since ff includes .active, removing the last 7 chars gives filename.xml?
-								# No, f = ff[0:-7] is the prefix.
-								# Wait, ff is "my_scan.xml.active". f is "my_scan.xml".
-								# But let's be careful.
-								# If filename was "my_scan.xml", nmap used "/tmp/my_scan.xml.active".
-								# So target is /opt/xml/ + f.
-								src = '/tmp/' + ff
-								dst = '/opt/xml/' + f
+					rx = re.search(r'args\s*=\s*["\']?[^"\']*startstr\s*=\s*["\']?([^"\'>\s]+)', line)
+					if rx is not None and 'startstr' in line:
+						res['scans'][f]['startstr'] = rx.group(1)
+
+					if 'startstr=' in line or 'startstr="' in line:
+						m = re.search(r'startstr\s*=\s*["\']?([^"\'\s>]+)', line)
+						if m is not None:
+							res['scans'][f]['startstr'] = m.group(1)
+
+					rx = re.search(r'scaninfo type\s*=\s*["\']?(.+?)["\']?\s+protocol\s*=\s*["\']?(.+?)["\']?\s+numservices', line)
+					if rx is not None:
+						res['scans'][f]['type'] = rx.group(1)
+						res['scans'][f]['protocol'] = rx.group(2)
+
+					rx = re.search(r'finished .+?summary\s*=\s*["\']?(.+?)["\']?\s+exit\s*=', line)
+					if rx is not None:
+						res['scans'][f]['status'] = 'finished'
+						res['scans'][f]['summary'] = rx.group(1)
+
+						try:
+							src = '/tmp/' + ff
+							dst = '/opt/xml/' + f
+							if os.path.exists(src):
 								shutil.move(src, dst)
-							except Exception as e:
-								# If move fails, we can't do much, but logging/ignoring prevents crash.
-								pass
-			except Exception:
-				pass
+						except Exception:
+							pass
+		except Exception:
+			pass
 
 	return HttpResponse(json.dumps(res, indent=4), content_type="application/json")
 

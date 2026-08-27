@@ -92,9 +92,11 @@ function checkActiveScan() {
 		// console.log(d);
 		$('#activescan_info').html('');
 		var c = 0;
+		var activeScanFound = false;
 		for(i in d['scans']) {
 			c = (c + 1);
 			if(d['scans'][i]['status'] == 'active') {
+				activeScanFound = true;
 
 				$('#activescan_line').css('display','block');
 				$('#activescan_info').css('display','block');
@@ -143,13 +145,15 @@ function checkActiveScan() {
 					$('.wm_menu > ul > section > li > a').each(function() { $(this).stop().show(); });
 				}
 
+				clearInterval(active_scan_timer);
 				swal("Done!", "Your Nmap scan is done. reload this page...", "success");
 				setTimeout(function() { location.reload(); }, 5000);
 			}
 		}
 
-		if(c <= 0) {
+		if(c <= 0 || !activeScanFound) {
 			$('#activescancard').css('display','none');
+			clearInterval(active_scan_timer);
 		}
 	});
 }

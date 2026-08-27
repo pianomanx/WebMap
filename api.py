@@ -126,27 +126,52 @@ def port_details(request, address, portid):
 
 def genPDF(request):
 	if 'auth' not in request.session:
-		return False
+		return HttpResponse(json.dumps({'error':'unauthorized'}), content_type="application/json")
 
-	if 'scanfile' in request.session:
-		pdffile = hashlib.md5(str(request.session['scanfile']).encode('utf-8')).hexdigest()+'.pdf'
-		pdfpath = '/opt/nmapdashboard/nmapreport/static/'+pdffile
-		if os.path.exists(pdfpath):
-			os.remove(pdfpath)
+	if 'scanfile' not in request.session:
+		return HttpResponse(json.dumps({'error':'no scan selected'}), content_type="application/json")
 
-		subprocess.Popen([
-			'wkhtmltopdf',
-			'--cookie',
-			'sessionid',
-			request.session._session_key,
-			'--enable-javascript',
-			'--javascript-delay',
-			'6000',
-			'http://127.0.0.1:8000/view/pdf/',
-			pdfpath
-		], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-		res = {'ok':'PDF created', 'file':'/static/'+pdffile}
-		return HttpResponse(json.dumps(res), content_type="application/json")
+	scanfile = os.path.basename(request.session['scanfile'])
+	scanpath = os.path.join('/opt/xml/', scanfile)
+	if not os.path.exists(scanpath):
+		return HttpResponse(json.dumps({'error':'scan file not found'}), content_type="application/json")
+
+	pdffile = hashlib.md5(str(scanfile).encode('utf-8')).hexdigest()+'.pdf'
+	static_dir = os.path.join('/opt/nmapdashboard/nmapreport/static/')
+	os.makedirs(static_dir, exist_ok=True)
+	pdfpath = os.path.join(static_dir, pdffile)
+	if os.path.exists(pdfpath):
+		os.remove(pdfpath)
+
+	session_key = getattr(request.session, '_session_key', None) or request.COOKIES.get('sessionid')
+	if not session_key:
+		return HttpResponse(json.dumps({'error':'session missing'}), content_type="application/json")
+
+	cmd = [
+		'wkhtmltopdf',
+		'--enable-javascript',
+		'--javascript-delay',
+		'6000',
+		'--cookie',
+		'sessionid',
+		session_key,
+		'http://127.0.0.1:8000/view/pdf/',
+		pdfpath,
+	]
+	try:
+		result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+		if result.returncode != 0:
+			return HttpResponse(json.dumps({'error':'PDF generation failed', 'details': (result.stderr or result.stdout)[:500]}), content_type="application/json")
+	except FileNotFoundError:
+		return HttpResponse(json.dumps({'error':'wkhtmltopdf is not installed'}), content_type="application/json")
+	except subprocess.TimeoutExpired:
+		return HttpResponse(json.dumps({'error':'PDF generation timed out'}), content_type="application/json")
+
+	if not os.path.exists(pdfpath):
+		return HttpResponse(json.dumps({'error':'PDF file was not created'}), content_type="application/json")
+
+	res = {'ok':'PDF created', 'file':'/static/'+pdffile}
+	return HttpResponse(json.dumps(res), content_type="application/json")
 
 def getCVE(request):
 	res = {}
