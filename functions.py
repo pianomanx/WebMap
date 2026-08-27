@@ -3,14 +3,30 @@ import xmltodict, json, html, os, hashlib, re, urllib.parse, base64
 def token_check(token):
 	# Check environment variable first
 	env_token = os.environ.get('WEBMAP_TOKEN')
-	if env_token:
-		if env_token == token:
-			return True
+	if env_token and env_token == token:
+		return True
+
+	for token_file in ('/root/token.plain', '/root/token.txt'):
+		try:
+			with open(token_file, 'r') as f:
+				stored_token = f.read().strip()
+			if stored_token and stored_token == token:
+				return True
+		except Exception:
+			pass
 
 	try:
-		tokenhash = open('/root/token.sha256').read().strip()
-		if tokenhash == hashlib.sha256(token.encode('utf-8')).hexdigest():
+		with open('/root/token.sha256', 'r') as f:
+			tokenhash = f.read().strip()
+		if tokenhash and tokenhash == hashlib.sha256(token.encode('utf-8')).hexdigest():
 			return True
+		if tokenhash and ':' in tokenhash:
+			salt_hex, digest_hex = tokenhash.split(':', 1)
+			salt = bytes.fromhex(salt_hex)
+			expected = bytes.fromhex(digest_hex)
+			actual = hashlib.pbkdf2_hmac('sha256', token.encode('utf-8'), salt, 600000)
+			if hmac.compare_digest(actual, expected):
+				return True
 	except Exception:
 		pass
 
